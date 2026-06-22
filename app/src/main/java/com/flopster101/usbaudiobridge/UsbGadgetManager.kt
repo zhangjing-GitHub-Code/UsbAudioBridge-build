@@ -108,6 +108,7 @@ object UsbGadgetManager {
             "android.hardware.usb.gadget-service.samsung",
             "android.hardware.usb.gadget-service.mediatek",
             "android.hardware.usb-service.mediatek",
+            "vendor.usb-hal",
             "vendor.usb-hal-1-0",
             "vendor.usb-hal-1-1",
             "vendor.usb-hal-1-2",
@@ -540,6 +541,25 @@ object UsbGadgetManager {
         // Step 5: Bind the gadget
         if (bindGadgetWithRetry(logCallback)) {
             runRootCommands(listOf("setprop sys.usb.state $sysUsbState")) {}
+
+            // Verify function link is correct (HAL might have overridden it)
+            Thread.sleep(200)
+            val actualLink = runRootCommandGetOutput("readlink $GADGET_ROOT/configs/b.1/f1 2>/dev/null || echo ''")
+            val expectedLinkSuffix = "/functions/$uacFunctionName"
+            if (actualLink.isNotEmpty() && !actualLink.endsWith(expectedLinkSuffix)) {
+                logCallback("[Gadget] WARNING: function link was overridden to '$actualLink', re-linking...")
+                runRootCommands(listOf(
+                    "rm -f $GADGET_ROOT/configs/b.1/f1",
+                    "ln -s $uacFunctionPath $GADGET_ROOT/configs/b.1/f1"
+                ), logCallback)
+                // Re-verify
+                val retryLink = runRootCommandGetOutput("readlink $GADGET_ROOT/configs/b.1/f1 2>/dev/null || echo ''")
+                if (retryLink.endsWith(expectedLinkSuffix)) {
+                    logCallback("[Gadget] Function link restored to $uacFunctionName")
+                } else {
+                    logCallback("[Gadget] ERROR: could not restore function link (still '$retryLink')")
+                }
+            }
 
             if (adbAvailable) {
                 logCallback("[Gadget] Composite gadget active: $uacDisplayName + ADB")
