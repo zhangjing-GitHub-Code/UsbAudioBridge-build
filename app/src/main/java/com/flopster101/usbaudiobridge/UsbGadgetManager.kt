@@ -479,29 +479,14 @@ object UsbGadgetManager {
 
         // Prevent init scripts from reapplying default USB config while we work
         val origUsbConfig = runRootCommandGetOutput("getprop sys.usb.config")
-        logCallback("[Gadget] Saving sys.usb.config='$origUsbConfig', overriding to 'none'...")
-        runRootCommand("resetprop sys.usb.config none", {})
-
-        // Poll for init's "none" action to finish (UDC is free)
-        val udcName = getPreferredUdcController()
-        if (udcName != null) {
-            val udcStatePath = "/sys/class/udc/$udcName/state"
-            var pollAttempts = 0
-            while (pollAttempts < 40) {
-                val state = runRootCommandGetOutput("cat $udcStatePath 2>/dev/null").trim()
-                if (state == "free" || state == "waiting for connection from USB" || state.isEmpty()) {
-                    logCallback("[Gadget] UDC state '$state' after ${pollAttempts * 50}ms, proceeding")
-                    break
-                }
-                Thread.sleep(50)
-                pollAttempts++
-            }
-            if (pollAttempts >= 40) {
-                logCallback("[Gadget] UDC state not free after 2s (state: ${runRootCommandGetOutput("cat $udcStatePath 2>/dev/null").trim()}), proceeding anyway")
-            }
-        } else {
-            Thread.sleep(500)
+        logCallback("[Gadget] Current sys.usb.config='$origUsbConfig', setting to 'none'...")
+        if (origUsbConfig == "none") {
+            // Already none: force a real transition so init runs the none cleanup action
+            runRootCommand("resetprop sys.usb.config midi", {})
+            Thread.sleep(200)
         }
+        runRootCommand("resetprop sys.usb.config none", {})
+        Thread.sleep(500)
 
         // Step 4: Setup configfs structure
         val configCommands = mutableListOf(
@@ -696,10 +681,13 @@ object UsbGadgetManager {
             // Ignore
         }
 
-        // Restart USB HAL (restores original sys.usb.config automatically)
+        // Restart HAL first (safe: no property change, HAL startup takes time)
         startUsbHal(logCallback, settingsRepo)
 
-        // Clear our cached backup since the HAL has restored state
+        // Restore original USB config from cache after HAL is running.
+        // This calls resetprop which triggers init, but by now any cable
+        // disconnect uevent has already settled, avoiding the SMMU race.
+        restoreUsbConfig(settingsRepo, logCallback)
         settingsRepo?.clearOriginalUsbConfig()
 
         logCallback("[Gadget] Gadget disabled. USB restored to system control.")
