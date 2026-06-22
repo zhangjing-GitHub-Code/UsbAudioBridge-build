@@ -481,7 +481,27 @@ object UsbGadgetManager {
         val origUsbConfig = runRootCommandGetOutput("getprop sys.usb.config")
         logCallback("[Gadget] Saving sys.usb.config='$origUsbConfig', overriding to 'none'...")
         runRootCommand("resetprop sys.usb.config none", {})
-        Thread.sleep(500)
+
+        // Poll for init's "none" action to finish (UDC is free)
+        val udcName = getPreferredUdcController()
+        if (udcName != null) {
+            val udcStatePath = "/sys/class/udc/$udcName/state"
+            var pollAttempts = 0
+            while (pollAttempts < 40) {
+                val state = runRootCommandGetOutput("cat $udcStatePath 2>/dev/null").trim()
+                if (state == "free" || state == "waiting for connection from USB" || state.isEmpty()) {
+                    logCallback("[Gadget] UDC state '$state' after ${pollAttempts * 50}ms, proceeding")
+                    break
+                }
+                Thread.sleep(50)
+                pollAttempts++
+            }
+            if (pollAttempts >= 40) {
+                logCallback("[Gadget] UDC state not free after 2s (state: ${runRootCommandGetOutput("cat $udcStatePath 2>/dev/null").trim()}), proceeding anyway")
+            }
+        } else {
+            Thread.sleep(500)
+        }
 
         // Step 4: Setup configfs structure
         val configCommands = mutableListOf(
@@ -676,12 +696,11 @@ object UsbGadgetManager {
             // Ignore
         }
 
-        // Restore system USB control
-        restoreUsbConfig(settingsRepo, logCallback)
-        settingsRepo?.clearOriginalUsbConfig()
-
-        // Restart USB HAL if we stopped it
+        // Restart USB HAL (restores original sys.usb.config automatically)
         startUsbHal(logCallback, settingsRepo)
+
+        // Clear our cached backup since the HAL has restored state
+        settingsRepo?.clearOriginalUsbConfig()
 
         logCallback("[Gadget] Gadget disabled. USB restored to system control.")
     }
