@@ -61,3 +61,12 @@ Java_com_flopster101_usbaudiobridge_AudioService_setNativeMicMute(
     JNIEnv *env, jobject /* this */, jboolean muted) {
     isMicMuted = muted;
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_usbaudiobridge_AudioService_setNativeMicGain(
+    JNIEnv *env, jobject /* this */, jfloat gain) {
+    if (gain >= 0.1f && gain <= 10.0f) {
+        micGain = gain;
+        LOGD("[Native] Mic gain set to %.1f", gain);
+    }
+}

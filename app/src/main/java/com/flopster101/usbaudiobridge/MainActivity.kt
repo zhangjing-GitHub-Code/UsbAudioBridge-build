@@ -280,6 +280,7 @@ class MainActivity : ComponentActivity() {
             autoRestartOnOutputChange = settingsRepo.getAutoRestartOnOutputChange(),
             activeDirectionsOption = settingsRepo.getActiveDirections(),
             micSourceOption = settingsRepo.getMicSource(),
+            micGain = settingsRepo.getMicGain(),
             notificationEnabled = settingsRepo.getNotificationEnabled(),
             keepScreenOnOption = settingsRepo.getKeepScreenOn(),
             screensaverEnabled = settingsRepo.getScreensaverEnabled(),
@@ -550,6 +551,11 @@ class MainActivity : ComponentActivity() {
                                  uiState = uiState.copy(micSourceOption = it)
                                  settingsRepo.saveMicSource(it)
                             },
+                            onMicGainChange = {
+                                 uiState = uiState.copy(micGain = it)
+                                 settingsRepo.saveMicGain(it)
+                                 audioService?.setNativeMicGain(it)
+                            },
                             onNotificationEnabledChange = {
                                 uiState = uiState.copy(notificationEnabled = it)
                                 settingsRepo.saveNotificationEnabled(it)
@@ -637,6 +643,7 @@ class MainActivity : ComponentActivity() {
                                     autoRestartOnOutputChange = settingsRepo.getAutoRestartOnOutputChange(),
                                     activeDirectionsOption = settingsRepo.getActiveDirections(),
                                     micSourceOption = settingsRepo.getMicSource(),
+                                    micGain = settingsRepo.getMicGain(),
                                     notificationEnabled = settingsRepo.getNotificationEnabled(),
                                     showKernelNotice = false,
                                     showOldKernelNotice = false,

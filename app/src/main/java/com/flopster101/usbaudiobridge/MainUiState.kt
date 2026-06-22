@@ -20,6 +20,7 @@ data class MainUiState(
     val autoRestartOnOutputChange: Boolean = false,
     val activeDirectionsOption: Int = 1, // 1=Speaker, 2=Mic, 3=Both
     val micSourceOption: Int = 6, // 6=VoiceRec (Default/Auto)
+    val micGain: Float = 2.0f,       // 2.0x = +6dB default boost
     val notificationEnabled: Boolean = true,
     val showKernelNotice: Boolean = false,
     val showOldKernelNotice: Boolean = false,

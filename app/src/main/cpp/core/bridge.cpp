@@ -21,6 +21,7 @@ std::atomic<bool> isRunning{false};
 std::atomic<bool> isFinished{true};
 std::atomic<bool> isSpeakerMuted{false};
 std::atomic<bool> isMicMuted{false};
+std::atomic<float> micGain{2.0f};
 std::thread bridgeThread;
 
 // --- Capture Thread ---
@@ -254,6 +255,18 @@ void playbackLoop(unsigned int card, unsigned int device, int sampleRate,
     if (readBytes > 0) {
       if (isMicMuted) {
         std::memset(buffer.data(), 0, readBytes);
+      } else {
+        float gain = micGain.load();
+        if (std::fabs(gain - 1.0f) > 0.01f) {
+          int16_t *samples = reinterpret_cast<int16_t *>(buffer.data());
+          size_t sampleCount = readBytes / sizeof(int16_t);
+          for (size_t i = 0; i < sampleCount; i++) {
+            float val = (float)samples[i] * gain;
+            if (val > 32767.0f) val = 32767.0f;
+            if (val < -32768.0f) val = -32768.0f;
+            samples[i] = (int16_t)val;
+          }
+        }
       }
       int err = pcm_write(pcm, buffer.data(), readBytes);
       if (err) {

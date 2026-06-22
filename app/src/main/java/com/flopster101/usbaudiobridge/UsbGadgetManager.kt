@@ -801,6 +801,11 @@ object UsbGadgetManager {
         var cardIndex = -1
 
         try {
+            val dumpCmd = "echo '=== /proc/asound/cards ==='; cat /proc/asound/cards; echo '=== UDC ==='; cat /config/usb_gadget/g1/UDC 2>/dev/null || echo 'UDC=none'; echo '=== uac2.0 linked ==='; readlink /config/usb_gadget/g1/configs/b.1/f1 2>/dev/null || echo 'no function linked'"
+            val dumpProcess = Runtime.getRuntime().exec(arrayOf("su", "-c", dumpCmd))
+            val dumpLines = dumpProcess.inputStream.bufferedReader().readLines()
+            dumpLines.forEach { l -> logCallback("[Gadget] $l") }
+
             val checkCmd = "cat /proc/asound/cards | grep -iE 'UAC[12][[:space:]_-]*Gadget|UAC[12]Gadget' | head -n1 | awk '{print \$1}'"
             val process = Runtime.getRuntime().exec(arrayOf("su", "-c", checkCmd))
             val output = process.inputStream.bufferedReader().readText().trim()
@@ -813,21 +818,27 @@ object UsbGadgetManager {
         }
 
         if (cardIndex != -1) {
-            val devPath = "/dev/snd/pcmC${cardIndex}D0c"
-            if (runRootCommand("test -e $devPath", {})) {
+            val pcmDev = "pcmC${cardIndex}D0"
+            val devCapPath = "/dev/snd/${pcmDev}c"
+            val devPlayPath = "/dev/snd/${pcmDev}p"
+            if (runRootCommand("test -e $devCapPath", {})) {
                  // Retry chmod in case of race conditions
                  for (i in 1..3) {
-                     runRootCommand("chmod 666 /dev/snd/pcmC${cardIndex}D0c", {})
-                     runRootCommand("chmod 666 /dev/snd/pcmC${cardIndex}D0p", {})
+                     runRootCommand("chmod 666 $devCapPath", {})
+                     runRootCommand("chmod 666 $devPlayPath", {})
                      Thread.sleep(100)
                  }
                  logCallback("[Gadget] USB audio gadget driver found at card $cardIndex")
                  return@withContext cardIndex
             } else {
-                logCallback("[Gadget] Card $cardIndex found, but pcmC${cardIndex}D0c is missing.")
+                logCallback("[Gadget] Card $cardIndex found, but $devCapPath is missing.")
+                val lsDev = runRootCommandWithOutput("ls -la /dev/snd/ 2>/dev/null")
+                lsDev.forEach { l -> logCallback("[Gadget] $l") }
             }
         } else {
-             logCallback("[Gadget] USB audio gadget card not found. Is USB connected?")
+             logCallback("[Gadget] USB audio gadget card not found (grep returned empty).")
+             val cardsDump = runRootCommandWithOutput("cat /proc/asound/cards 2>/dev/null")
+             cardsDump.forEach { l -> logCallback("[Gadget] /proc/asound/cards: $l") }
         }
 
         return@withContext -1

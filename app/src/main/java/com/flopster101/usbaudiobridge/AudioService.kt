@@ -163,6 +163,7 @@ class AudioService : Service() {
     external fun stopAudioBridge()
     external fun setNativeSpeakerMute(muted: Boolean)
     external fun setNativeMicMute(muted: Boolean)
+    external fun setNativeMicGain(gain: Float)
 
     // Called from C++ JNI
     fun onNativeLog(msg: String) {
@@ -593,6 +594,7 @@ class AudioService : Service() {
             }
 
             startAudioBridge(cardId, 0, bufferSize, periodSize, engineType, sampleRate, activeDirections, micSource)
+            setNativeMicGain(settingsRepo.getMicGain())
 
             isBridgeRunning = true
             lastNativeState = STATE_CONNECTING

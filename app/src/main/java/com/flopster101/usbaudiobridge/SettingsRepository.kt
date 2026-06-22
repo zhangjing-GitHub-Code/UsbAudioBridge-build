@@ -42,9 +42,13 @@ class SettingsRepository(context: Context) {
     fun getActiveDirections(): Int = prefs.getInt("active_directions", 1)
 
     // Mic Source (Preset)
-    // 0=Unspecified/Auto, 1=Generic, 5=Camcorder, 6=VoiceRec, 7=VoiceComm, 9=Unprocessed, 10=Performance
+    // 0=Unspecified/Auto, 1=Generic, 5=Camcorder, 6=VoiceRec, 7=VoiceComm, 8=Unprocessed, 9=Performance
     fun saveMicSource(source: Int) = prefs.edit().putInt("mic_source", source).apply()
     fun getMicSource(): Int = prefs.getInt("mic_source", 6) // Default to Voice Recognition (6) for best results usually
+
+    // Mic Gain (multiplier 0.1-10.0, default 2.0 = +6dB)
+    fun saveMicGain(gain: Float) = prefs.edit().putFloat("mic_gain", gain).apply()
+    fun getMicGain(): Float = prefs.getFloat("mic_gain", 2.0f)
 
     // Kernel compatibility notice
     fun shouldShowKernelNotice(): Boolean = !prefs.getBoolean("kernel_notice_dismissed", false)

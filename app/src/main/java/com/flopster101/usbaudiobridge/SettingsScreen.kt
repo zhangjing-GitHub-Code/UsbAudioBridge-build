@@ -32,6 +32,7 @@ fun SettingsScreen(
     onAutoRestartChange: (Boolean) -> Unit,
     onActiveDirectionsChange: (Int) -> Unit,
     onMicSourceChange: (Int) -> Unit,
+    onMicGainChange: (Float) -> Unit,
     onNotificationEnabledChange: (Boolean) -> Unit,
     onKeepScreenOnChange: (Boolean) -> Unit,
     onScreensaverEnabledChange: (Boolean) -> Unit,
@@ -241,7 +242,7 @@ fun SettingsScreen(
         // Mic Source
         item {
             var showMicDialog by remember { mutableStateOf(false) }
-            val options = listOf(6, 1, 5, 7, 9, 10)
+            val options = listOf(6, 1, 5, 7, 8, 9)
             val labels = listOf("Auto (voice rec)", "Mic", "Camcorder", "Voice comm", "Unprocessed", "Performance")
 
             GroupedSettingsCard(
@@ -285,6 +286,45 @@ fun SettingsScreen(
                         showMicDialog = false
                     }
                 )
+            }
+        }
+        item { Spacer(Modifier.height(2.dp)) }
+
+        // Mic Gain slider
+        item {
+            val gainDb = 20.0 * kotlin.math.log10(state.micGain.toDouble())
+            val gainStr = "%.1f".format(gainDb)
+            val gainLabel = if (state.micGain >= 1.0f) "+$gainStr dB" else "$gainStr dB"
+            GroupedSettingsCard(
+                position = SettingsGroupPosition.Middle,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Mic gain", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            text = "${"%.1f".format(state.micGain)}x ($gainLabel)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Slider(
+                        value = state.micGain,
+                        onValueChange = onMicGainChange,
+                        valueRange = 0.5f..5.0f,
+                        steps = 17
+                    )
+                    Text(
+                        text = "Digital gain boost. Higher = louder, risk of clipping.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
         item { Spacer(Modifier.height(2.dp)) }
