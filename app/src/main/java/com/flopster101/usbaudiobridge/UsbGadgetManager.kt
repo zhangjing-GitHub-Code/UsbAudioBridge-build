@@ -601,26 +601,34 @@ object UsbGadgetManager {
             Thread.sleep(500)
             runRootCommand("echo 1 > /sys/class/udc/$udcName/soft_connect", {})
             Thread.sleep(1000)
-            return true
+            val state = runRootCommandGetOutput("cat /sys/class/udc/$udcName/state 2>/dev/null")
+            // Check if soft_connect actually changed state
+            if (state == "not attached" || state == "free") {
+                logCallback("[Gadget] soft_connect did not resolve the issue (state=$state), trying driver rebind")
+            } else {
+                logCallback("[Gadget] soft_connect gave state=$state, proceeding")
+                return true
+            }
         }
 
         // Fallback: unbind/re-bind dwc3 platform driver
-        logCallback("[Gadget] UDC stuck - unbinding/rebinding dwc3 driver (this may warn but should not crash)...")
+        logCallback("[Gadget] Unbinding/rebinding dwc3 driver for $udcName...")
         runRootCommand("echo '$udcName' > /sys/bus/platform/drivers/dwc3/unbind 2>/dev/null", {})
-        Thread.sleep(1500)
+        Thread.sleep(2000)
         val rebound = runRootCommandGetOutput("ls /sys/class/udc 2>/dev/null")
         if (rebound.contains(udcName)) {
             logCallback("[Gadget] UDC reappeared after unbind (rebound automatically)")
+            Thread.sleep(1000)
             return true
         }
         runRootCommand("echo '$udcName' > /sys/bus/platform/drivers/dwc3/bind 2>/dev/null", {})
-        Thread.sleep(1500)
+        Thread.sleep(2000)
         val afterBind = runRootCommandGetOutput("ls /sys/class/udc 2>/dev/null")
         if (afterBind.contains(udcName)) {
             logCallback("[Gadget] UDC recovered after driver rebind")
             return true
         }
-        logCallback("[Gadget] UDC recovery failed - UDC not available after rebind")
+        logCallback("[Gadget] UDC recovery failed - driver not available after rebind")
         return false
     }
 
@@ -648,12 +656,18 @@ object UsbGadgetManager {
                  Thread.sleep(200)
 
                  logCallback("[Gadget] Binding to $udcName (Attempt $i)...")
-                 val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "echo '$udcName' > $GADGET_ROOT/UDC 2>&1"))
+                 val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "echo '$udcName' 2>/tmp/udc_bind_err > $GADGET_ROOT/UDC && echo ok || echo fail"))
                  val exitCode = p.waitFor()
-                 val errOut = p.inputStream.bufferedReader().readText().trim()
+                 val output = p.inputStream.bufferedReader().readText().trim()
+                 val bindErr = runRootCommandGetOutput("cat /tmp/udc_bind_err 2>/dev/null")
+                 val dmesgTail = runRootCommandGetOutput("dmesg | tail -5 2>/dev/null")
+                 val canWrite = runRootCommandGetOutput("test -w $GADGET_ROOT/UDC && echo yes || echo no")
 
-                 if (errOut.isNotEmpty()) {
-                     logCallback("[Gadget] UDC write stderr: '$errOut'")
+                 if (bindErr.isNotEmpty()) {
+                     logCallback("[Gadget] UDC write error: '$bindErr'")
+                 }
+                 if (output != "ok") {
+                     logCallback("[Gadget] UDC write command returned: '$output' (writable=$canWrite)")
                  }
 
                  Thread.sleep(300)
@@ -665,6 +679,7 @@ object UsbGadgetManager {
                  val udcList = runRootCommandGetOutput("ls /sys/class/udc 2>/dev/null")
                  val state = runRootCommandGetOutput("cat /sys/class/udc/$udcName/state 2>/dev/null")
                  logCallback("[Gadget] Bind $i failed: UDC='$currentUdc' (exit=$exitCode), available='$udcList', state='$state'")
+                 logCallback("[Gadget] dmesg: $dmesgTail")
                  Thread.sleep(800)
 
              } catch (e: Exception) {
