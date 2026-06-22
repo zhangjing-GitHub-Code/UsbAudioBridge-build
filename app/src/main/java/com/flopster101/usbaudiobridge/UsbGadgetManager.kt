@@ -97,6 +97,11 @@ object UsbGadgetManager {
         }
     }
 
+    private fun runRootCommandWithOutput(command: String): List<String> {
+        val output = runRootCommandGetOutput(command)
+        return if (output.isEmpty()) emptyList() else output.lines()
+    }
+
     private suspend fun findRunningUsbHalService(): String? = withContext(Dispatchers.IO) {
         val candidates = listOf(
             "vendor.usb-gadget-hal-1-0",
