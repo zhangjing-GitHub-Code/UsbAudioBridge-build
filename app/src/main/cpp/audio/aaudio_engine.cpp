@@ -140,8 +140,8 @@ bool AAudioInputEngine::open(int rate, int channelCount) {
     AAudioStreamBuilder_setChannelCount(builder, channelCount);
     AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_I16);
     AAudioStreamBuilder_setDirection(builder, AAUDIO_DIRECTION_INPUT);
+    AAudioStreamBuilder_setBufferCapacityInFrames(builder, rate / 10);
     maybeSetInputPreset(builder, inputPreset);
-    // Error callback handling for disconnect? For now simple.
 
     if (AAudioStreamBuilder_openStream(builder, &stream) != AAUDIO_OK) {
         LOGE("[Native] AAudio Input open failed");
@@ -159,7 +159,7 @@ void AAudioInputEngine::start() {
 size_t AAudioInputEngine::read(uint8_t* data, size_t sizeBytes) {
     if (!stream) return 0;
     // Read with timeout
-    auto result = AAudioStream_read(stream, data, sizeBytes / 4, 100000000);
+    auto result = AAudioStream_read(stream, data, sizeBytes / 4, 10000000);
     // AAudio read size is in Frames. 1 Frame = 2 chars * 2 ch = 4 bytes.
     // sizeBytes is bytes.
     // frames = sizeBytes / 4.

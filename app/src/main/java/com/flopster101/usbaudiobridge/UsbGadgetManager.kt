@@ -500,7 +500,7 @@ object UsbGadgetManager {
             "echo $sampleRate > $uacFunctionPath/c_srate",
             "echo $CH_MASK > $uacFunctionPath/c_chmask",
             "echo $SAMPLE_SIZE > $uacFunctionPath/c_ssize",
-            "echo 2 > $uacFunctionPath/req_number 2>/dev/null || true",
+            "echo 8 > $uacFunctionPath/req_number 2>/dev/null || true",
 
             // Set device strings
             "mkdir -p $GADGET_ROOT/strings/0x409",

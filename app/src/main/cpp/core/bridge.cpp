@@ -208,7 +208,7 @@ void captureLoop(unsigned int card, unsigned int device, RingBuffer *rb,
 // --- Playback Loop (Mic -> Gadget) ---
 // Reads from Android Mic (InputEngine), writes to USB Gadget (PCM_OUT)
 void playbackLoop(unsigned int card, unsigned int device, int sampleRate,
-                  int engineType, int micSource) {
+                  int engineType, int micSource, int periodSizeFrames) {
   setHighPriority();
   LOGD("[Native] Starting playback loop (Mic -> Gadget)...");
 
@@ -216,7 +216,7 @@ void playbackLoop(unsigned int card, unsigned int device, int sampleRate,
   memset(&config, 0, sizeof(config));
   config.channels = 2;
   config.rate = sampleRate > 0 ? sampleRate : 48000;
-  config.period_size = 1024;
+  config.period_size = periodSizeFrames > 0 ? periodSizeFrames : 480;
   config.period_count = 4;
   config.format = PCM_FORMAT_S16_LE;
 
@@ -258,8 +258,7 @@ void playbackLoop(unsigned int card, unsigned int device, int sampleRate,
       int err = pcm_write(pcm, buffer.data(), readBytes);
       if (err) {
         LOGE("[Native] PCM Write Error: %s", pcm_get_error(pcm));
-        // Attempt recovery? or just continue?
-        // pcm_prepare(pcm); // might help?
+        pcm_prepare(pcm);
       }
     } else {
       std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -288,7 +287,7 @@ void bridgeTask(int card, int device, int bufferSizeFrames,
   if (enableMic) {
     // Start Mic -> Gadget pipe in separate thread
     // We assume device 0 for both directions as is standard for UAC2 gadget
-    micThread = std::thread(playbackLoop, card, device, sampleRate, engineType, micSource);
+    micThread = std::thread(playbackLoop, card, device, sampleRate, engineType, micSource, periodSizeFrames);
   }
 
   if (!enableSpeaker) {
