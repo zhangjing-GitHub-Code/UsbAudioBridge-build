@@ -479,14 +479,19 @@ object UsbGadgetManager {
 
         // Prevent init scripts from reapplying default USB config while we work
         val origUsbConfig = runRootCommandGetOutput("getprop sys.usb.config")
-        logCallback("[Gadget] Current sys.usb.config='$origUsbConfig', setting to 'none'...")
-        if (origUsbConfig == "none") {
-            // Already none: force a real transition so init runs the none cleanup action
+        logCallback("[Gadget] Current sys.usb.config='$origUsbConfig'")
+
+        if (origUsbConfig == "none" || origUsbConfig.isBlank()) {
+            // State might be corrupt: fully cycle through midi→none
+            // so init completely resets the USB stack (functions, UDC, SMMU)
+            logCallback("[Gadget] Resetting USB state via sys.usb.config=midi...")
             runRootCommand("resetprop sys.usb.config midi", {})
-            Thread.sleep(200)
+            Thread.sleep(1500)
         }
+
+        logCallback("[Gadget] Setting sys.usb.config=none...")
         runRootCommand("resetprop sys.usb.config none", {})
-        Thread.sleep(500)
+        Thread.sleep(1500)
 
         // Step 4: Setup configfs structure
         val configCommands = mutableListOf(
@@ -606,7 +611,7 @@ object UsbGadgetManager {
                  Thread.sleep(200)
 
                  logCallback("[Gadget] Binding to $udcName (Attempt $i)...")
-                 runRootCommand("echo '$udcName' > $GADGET_ROOT/UDC", logCallback)
+                 runRootCommand("echo '$udcName' > $GADGET_ROOT/UDC 2>&1", logCallback)
 
                  Thread.sleep(300)
                  val currentUdc = getUdcContent()
@@ -614,7 +619,10 @@ object UsbGadgetManager {
                      return true
                  }
 
-                 logCallback("[Gadget] Bind attempt $i failed. UDC='$currentUdc'")
+                 // Check if UDC is available at all
+                 val udcList = runRootCommandGetOutput("ls /sys/class/udc 2>/dev/null")
+                 val state = runRootCommandGetOutput("cat /sys/class/udc/$udcName/state 2>/dev/null")
+                 logCallback("[Gadget] Bind attempt $i failed. UDC='$currentUdc', available UDCs='$udcList', state='$state'")
                  Thread.sleep(800)
 
              } catch (e: Exception) {
