@@ -196,11 +196,11 @@ object UsbGadgetManager {
             commands.add("setprop vendor.usb.config $savedVendor")
         }
         if (!savedSys.isNullOrBlank()) {
-            commands.add("setprop sys.usb.config $savedSys")
+            commands.add("resetprop sys.usb.config $savedSys")
         }
 
         if (commands.isEmpty()) {
-            commands.add("setprop sys.usb.config adb")
+            commands.add("resetprop sys.usb.config adb")
         }
 
         runRootCommands(commands, logCallback)
@@ -477,6 +477,12 @@ object UsbGadgetManager {
 
         applySeLinuxPolicy(logCallback)
 
+        // Prevent init scripts from reapplying default USB config while we work
+        val origUsbConfig = runRootCommandGetOutput("getprop sys.usb.config")
+        logCallback("[Gadget] Saving sys.usb.config='$origUsbConfig', overriding to 'none'...")
+        runRootCommand("resetprop sys.usb.config none", {})
+        Thread.sleep(500)
+
         // Step 4: Setup configfs structure
         val configCommands = mutableListOf(
             // Clear existing function links
@@ -541,25 +547,6 @@ object UsbGadgetManager {
         // Step 5: Bind the gadget
         if (bindGadgetWithRetry(logCallback)) {
             runRootCommands(listOf("setprop sys.usb.state $sysUsbState")) {}
-
-            // Verify function link is correct (HAL might have overridden it)
-            Thread.sleep(200)
-            val actualLink = runRootCommandGetOutput("readlink $GADGET_ROOT/configs/b.1/f1 2>/dev/null || echo ''")
-            val expectedLinkSuffix = "/functions/$uacFunctionName"
-            if (actualLink.isNotEmpty() && !actualLink.endsWith(expectedLinkSuffix)) {
-                logCallback("[Gadget] WARNING: function link was overridden to '$actualLink', re-linking...")
-                runRootCommands(listOf(
-                    "rm -f $GADGET_ROOT/configs/b.1/f1",
-                    "ln -s $uacFunctionPath $GADGET_ROOT/configs/b.1/f1"
-                ), logCallback)
-                // Re-verify
-                val retryLink = runRootCommandGetOutput("readlink $GADGET_ROOT/configs/b.1/f1 2>/dev/null || echo ''")
-                if (retryLink.endsWith(expectedLinkSuffix)) {
-                    logCallback("[Gadget] Function link restored to $uacFunctionName")
-                } else {
-                    logCallback("[Gadget] ERROR: could not restore function link (still '$retryLink')")
-                }
-            }
 
             if (adbAvailable) {
                 logCallback("[Gadget] Composite gadget active: $uacDisplayName + ADB")
