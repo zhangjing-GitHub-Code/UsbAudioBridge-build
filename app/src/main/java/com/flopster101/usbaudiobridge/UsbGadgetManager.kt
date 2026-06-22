@@ -592,46 +592,6 @@ object UsbGadgetManager {
         return realController ?: controllers.first()
     }
 
-    private fun recoverUdcDriver(udcName: String, logCallback: (String) -> Unit): Boolean {
-        // Try soft_connect first (safest)
-        val softConnectExist = runRootCommandGetOutput("test -f /sys/class/udc/$udcName/soft_connect && echo yes")
-        if (softConnectExist == "yes") {
-            logCallback("[Gadget] UDC stuck - toggling soft_connect...")
-            runRootCommand("echo 0 > /sys/class/udc/$udcName/soft_connect", {})
-            Thread.sleep(500)
-            runRootCommand("echo 1 > /sys/class/udc/$udcName/soft_connect", {})
-            Thread.sleep(1000)
-            val state = runRootCommandGetOutput("cat /sys/class/udc/$udcName/state 2>/dev/null")
-            // Check if soft_connect actually changed state
-            if (state == "not attached" || state == "free") {
-                logCallback("[Gadget] soft_connect did not resolve the issue (state=$state), trying driver rebind")
-            } else {
-                logCallback("[Gadget] soft_connect gave state=$state, proceeding")
-                return true
-            }
-        }
-
-        // Fallback: unbind/re-bind dwc3 platform driver
-        logCallback("[Gadget] Unbinding/rebinding dwc3 driver for $udcName...")
-        runRootCommand("echo '$udcName' > /sys/bus/platform/drivers/dwc3/unbind 2>/dev/null", {})
-        Thread.sleep(2000)
-        val rebound = runRootCommandGetOutput("ls /sys/class/udc 2>/dev/null")
-        if (rebound.contains(udcName)) {
-            logCallback("[Gadget] UDC reappeared after unbind (rebound automatically)")
-            Thread.sleep(1000)
-            return true
-        }
-        runRootCommand("echo '$udcName' > /sys/bus/platform/drivers/dwc3/bind 2>/dev/null", {})
-        Thread.sleep(2000)
-        val afterBind = runRootCommandGetOutput("ls /sys/class/udc 2>/dev/null")
-        if (afterBind.contains(udcName)) {
-            logCallback("[Gadget] UDC recovered after driver rebind")
-            return true
-        }
-        logCallback("[Gadget] UDC recovery failed - driver not available after rebind")
-        return false
-    }
-
     private fun bindGadgetWithRetry(logCallback: (String) -> Unit): Boolean {
         for (i in 1..5) {
              try {
@@ -644,11 +604,6 @@ object UsbGadgetManager {
 
                  // MTK Specific: Force device mode
                  configureMtkMode(udcName, true, logCallback)
-
-                 // On attempt 3+, try recovering the UDC driver first
-                 if (i >= 3) {
-                     recoverUdcDriver(udcName, logCallback)
-                 }
 
                  // Ensure UDC is writable and clear
                  Runtime.getRuntime().exec(arrayOf("su", "-c", "chmod 666 $GADGET_ROOT/UDC")).waitFor()
